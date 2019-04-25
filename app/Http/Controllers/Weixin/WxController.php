@@ -22,9 +22,9 @@ class WxController extends Controller
      */
     public function wxEvent()
     {
-        echo $_GET['echostr'];die;
+        // echo $_GET['echostr'];die;
         //使用 Guzzle
-        $client = new Guzzle();
+        $client = new Client();
 
         $xml_str = file_get_contents("php://input");
         $log_str = '>>>>>>>>> '. date("Y-m-d H:i:s") . $xml_str . "\n";
