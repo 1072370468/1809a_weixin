@@ -6,7 +6,7 @@ use Illuminate\Http\Request;
 use App\Http\Controllers\Controller;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Redis;
-use GuzzleHttp\Client;
+// use GuzzleHttp\Client;
 use App\Model\GoodsModel;
 use Illuminate\Support\Facades\Storage;
 class WxController extends Controller
@@ -24,7 +24,7 @@ class WxController extends Controller
     {
         // echo $_GET['echostr'];die;
         //使用 Guzzle
-        $client = new Client();
+        // $client = new Client();
 
         $xml_str = file_get_contents("php://input");
         $log_str = '>>>>>>>>> '. date("Y-m-d H:i:s") . $xml_str . "\n";
