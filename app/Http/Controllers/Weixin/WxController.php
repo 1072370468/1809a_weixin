@@ -4,40 +4,102 @@ namespace App\Http\Controllers\Weixin;
 use GuzzleHttp\Psr7\Uri;
 use Illuminate\Http\Request;
 use App\Http\Controllers\Controller;
-
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Redis;
 use GuzzleHttp\Client;
+use App\Model\GoodsModel;
 use Illuminate\Support\Facades\Storage;
-
-use App\Model\WeixinUserModel;
-
 class WxController extends Controller
 {
     //首次接入
-    public function valid(){
+    public function valid()
+    {
         echo $_GET['echostr'];
     }
- 
-    /* 
-    接收微信推送事件
-    */
-  public function wxEvent()
+
+    /**
+     * 接收微信推送事件
+     */
+    public function wxEvent()
     {
         echo $_GET['echostr'];die;
-        //使用Guzzle
-        $client = new Client();
-        $xml_str = file_get_contents("php://input");
-        $log_str = '>>>>>>>>>'.date("Y-m-d H:i:s").$xml_str."\n";
-        file_put_contents("logs/wx_event.log",$log_str,FILE_APPEND);
-        //日志文件
-        $xml_obj = simplexml_load_string($xml_str);
-        //处理业务逻辑
-        $msg_type=$xml_obj->MsgType;    //消息类型
-        $open_id = $xml_obj->FromUserName;  //用户openid
-        $app = $xml_obj->ToUserName;    //公众号ID  
-        echo "weixin";
-    }
-    
+        //使用 Guzzle
+        $client = new Guzzle();
 
+        $xml_str = file_get_contents("php://input");
+        $log_str = '>>>>>>>>> '. date("Y-m-d H:i:s") . $xml_str . "\n";
+        file_put_contents('logs/wx_event.log',$log_str,FILE_APPEND);        //  日志文件
+
+        $xml_obj = simplexml_load_string($xml_str);
+
+        //处理业务逻辑
+
+
+        $msg_type = $xml_obj->MsgType;          //消息类型
+        $open_id = $xml_obj->FromUserName;      //用户openid
+        $app = $xml_obj->ToUserName;            // 公众号ID
+        if($msg_type=='image'){                 //处理图片素材
+            $media_id = $xml_obj->MediaId;
+
+            // MediaId URL
+            $url = 'https://api.weixin.qq.com/cgi-bin/media/get?access_token='.$this->getAccessToken().'&media_id='.$media_id;
+            $response = $client->get(new Uri($url));
+
+            $headers = $response->getHeaders();     //获取 响应 头信息
+            $file_info = $headers['Content-disposition'][0];            //获取文件名
+
+            $file_name =  rtrim(substr($file_info,-20),'"');
+            $new_file_name = 'weixin/' .substr(md5(time().mt_rand()),10,8).'_'.$file_name;
+
+            //保存文件
+            $rs = Storage::put($new_file_name, $response->getBody());       //保存文件
+            if($rs){
+                //TODO 保存成功
+            }else{
+                //TODO 保存失败
+            }
+
+
+            //var_dump($rs);
+        }elseif($msg_type=='text'){         //处理文本信息
+
+            //自动回复天气
+            if(strpos($xml_obj->Content,'+天气')){
+                //echo $xml_obj->Content;echo '</br>';
+                //获取城市名
+                $city = explode('+',$xml_obj->Content)[0];
+                //echo 'City: '.$city;
+                $url = 'https://free-api.heweather.net/s6/weather/now?key=HE1904160951011886&location='.$city;
+                $arr = json_decode(file_get_contents($url),true);
+                //echo '<pre>';print_r($arr);echo '</pre>';
+
+               // echo '<pre>';print_r($arr);echo '</pre>';die;
+                if($arr['HeWeather6'][0]['status']=='ok'){     //城市名是否正确
+                    $fl = $arr['HeWeather6'][0]['now']['tmp'];      //摄氏度
+                    $wind_dir = $arr['HeWeather6'][0]['now']['wind_dir'];       //风向
+                    $wind_sc = $arr['HeWeather6'][0]['now']['wind_sc'];       //风力
+                    $hum = $arr['HeWeather6'][0]['now']['hum'];       //湿度
+                    $str = "城市：$city \n" ."温度: ".$fl."\n" . "风向：". $wind_dir ."\n" . "风力：".$wind_sc . "\n湿度：".$hum."\n";
+
+                    $response_xml = '<xml>
+                        <ToUserName><![CDATA['.$open_id.']]></ToUserName>
+                        <FromUserName><![CDATA['.$app.']]></FromUserName>
+                        <CreateTime>'.time().'</CreateTime>
+                        <MsgType><![CDATA[text]]></MsgType>
+                        <Content><![CDATA['.$str.']]></Content>
+                        </xml>';
+                }else{
+                    $response_xml = '<xml>
+                        <ToUserName><![CDATA['.$open_id.']]></ToUserName>
+                        <FromUserName><![CDATA['.$app.']]></FromUserName>
+                        <CreateTime>'.time().'</CreateTime>
+                        <MsgType><![CDATA[text]]></MsgType>
+                        <Content><![CDATA[城市名不正确]]></Content>
+                        </xml>';
+                }
+                echo $response_xml;
+            }
+        }
+    }
 }
 ?>

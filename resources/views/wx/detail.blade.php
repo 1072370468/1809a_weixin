@@ -81,10 +81,12 @@
 
             <div class="content">
                 <div class="title m-b-md">
-                ddd
+                {{$goods->goods_name}}-{{$goods->goods_price}}
                 </div>
-
-                <div class="links">
+                <div>
+                商品浏览次数:{{$view}}
+                </div>
+               <!--  <div class="links">
                     <a href="https://laravel.com/docs">Docs</a>
                     <a href="https://laracasts.com">Laracasts</a>
                     <a href="https://laravel-news.com">News</a>
@@ -92,7 +94,7 @@
                     <a href="https://nova.laravel.com">Nova</a>
                     <a href="https://forge.laravel.com">Forge</a>
                     <a href="https://github.com/laravel/laravel">GitHub</a>
-                </div>
+                </div> -->
             </div>
         </div>
     </body>

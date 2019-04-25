@@ -81,7 +81,15 @@
 
             <div class="content">
                 <div class="title m-b-md">
-                ddd
+                @foreach($goods_info as $key=>$val)
+              <tr n_id={{$val->goods_id}}>
+              <td>{{$val->goods_name}}--{{$val->goods_price}}</td>
+              <td>
+              <a href="shoplist/{{$val->goods_id}}">商品详情</a>
+
+              </td>
+          </tr>
+          @endforeach
                 </div>
 
                 <div class="links">
