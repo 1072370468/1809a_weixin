@@ -12,20 +12,8 @@
 */
 
 Route::get('/', function () {
-phpinfo();
+//echo 123;
 });
-Route::get('/goodslist','Weixin\PhpinfoController@goodslist');       //缓存商品信息
-Route::get('/shoplist/{id?}','Weixin\PhpinfoController@shoplist');       //缓存商品信息
-Route::get('/cache/{id?}','Weixin\PhpinfoController@cachegoods');       //缓存商品信息
-
-
-Route::get('/weixin/valid','Weixin\WxController@valid');       //首次接入
-Route::post('/weixin/valid','Weixin\WxController@wxEvent');       //接收推送事件
-Route::get('/weixin/token','Weixin\WxController@getAccessToken');       //获取access_token
-
-Route::get('/weixin/send','Weixin\WxController@send');       //消息群发
-
-//计划任务
-Route::get('/crontab/delorders','Crontab\CrontabController@delorders');//删除过期订单
-
-
+route::prefix('valid')->group(function (){
+    route::any('/','Weixin\\WxController@valid');
+});

@@ -1,105 +1,79 @@
 <?php
 namespace App\Http\Controllers\Weixin;
 
+use App\Model\WeChat;
 use GuzzleHttp\Psr7\Uri;
 use Illuminate\Http\Request;
 use App\Http\Controllers\Controller;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Redis;
 // use GuzzleHttp\Client;
-use App\Model\GoodsModel;
+use App\Model\WeChatModel;
 use Illuminate\Support\Facades\Storage;
 class WxController extends Controller
 {
     //首次接入
-    public function valid()
+    public function valid(Request $request)
     {
-        echo $_GET['echostr'];
-    }
-
-    /**
-     * 接收微信推送事件
-     */
-    public function wxEvent()
-    {
-        // echo $_GET['echostr'];die;
-        //使用 Guzzle
-        // $client = new Client();
-
-        $xml_str = file_get_contents("php://input");
-        $log_str = '>>>>>>>>> '. date("Y-m-d H:i:s") . $xml_str . "\n";
-        file_put_contents('logs/wx_event.log',$log_str,FILE_APPEND);        //  日志文件
-
-        $xml_obj = simplexml_load_string($xml_str);
-
-        //处理业务逻辑
-
-
-        $msg_type = $xml_obj->MsgType;          //消息类型
-        $open_id = $xml_obj->FromUserName;      //用户openid
-        $app = $xml_obj->ToUserName;            // 公众号ID
-        if($msg_type=='image'){                 //处理图片素材
-            $media_id = $xml_obj->MediaId;
-
-            // MediaId URL
-            $url = 'https://api.weixin.qq.com/cgi-bin/media/get?access_token='.$this->getAccessToken().'&media_id='.$media_id;
-            $response = $client->get(new Uri($url));
-
-            $headers = $response->getHeaders();     //获取 响应 头信息
-            $file_info = $headers['Content-disposition'][0];            //获取文件名
-
-            $file_name =  rtrim(substr($file_info,-20),'"');
-            $new_file_name = 'weixin/' .substr(md5(time().mt_rand()),10,8).'_'.$file_name;
-
-            //保存文件
-            $rs = Storage::put($new_file_name, $response->getBody());       //保存文件
-            if($rs){
-                //TODO 保存成功
-            }else{
-                //TODO 保存失败
-            }
-
-
-            //var_dump($rs);
-        }elseif($msg_type=='text'){         //处理文本信息
-
-            //自动回复天气
-            if(strpos($xml_obj->Content,'+天气')){
-                //echo $xml_obj->Content;echo '</br>';
-                //获取城市名
-                $city = explode('+',$xml_obj->Content)[0];
-                //echo 'City: '.$city;
-                $url = 'https://free-api.heweather.net/s6/weather/now?key=HE1904160951011886&location='.$city;
-                $arr = json_decode(file_get_contents($url),true);
-                //echo '<pre>';print_r($arr);echo '</pre>';
-
-               // echo '<pre>';print_r($arr);echo '</pre>';die;
-                if($arr['HeWeather6'][0]['status']=='ok'){     //城市名是否正确
-                    $fl = $arr['HeWeather6'][0]['now']['tmp'];      //摄氏度
-                    $wind_dir = $arr['HeWeather6'][0]['now']['wind_dir'];       //风向
-                    $wind_sc = $arr['HeWeather6'][0]['now']['wind_sc'];       //风力
-                    $hum = $arr['HeWeather6'][0]['now']['hum'];       //湿度
-                    $str = "城市：$city \n" ."温度: ".$fl."\n" . "风向：". $wind_dir ."\n" . "风力：".$wind_sc . "\n湿度：".$hum."\n";
-
-                    $response_xml = '<xml>
-                        <ToUserName><![CDATA['.$open_id.']]></ToUserName>
-                        <FromUserName><![CDATA['.$app.']]></FromUserName>
-                        <CreateTime>'.time().'</CreateTime>
-                        <MsgType><![CDATA[text]]></MsgType>
-                        <Content><![CDATA['.$str.']]></Content>
-                        </xml>';
-                }else{
-                    $response_xml = '<xml>
-                        <ToUserName><![CDATA['.$open_id.']]></ToUserName>
-                        <FromUserName><![CDATA['.$app.']]></FromUserName>
-                        <CreateTime>'.time().'</CreateTime>
-                        <MsgType><![CDATA[text]]></MsgType>
-                        <Content><![CDATA[城市名不正确]]></Content>
-                        </xml>';
-                }
-                echo $response_xml;
-            }
+            //接收echostr
+        $echostr = $request->echostr;
+        //判断echostr 是否存在
+        if($this->CheckSignatrue($request)){
+            echo $echostr;
+        }else{
+            $this->responseMsg();
         }
     }
+    public function responseMsg(){
+        //接收微信推送过来的信息
+        $postStr=file_get_contents("php://input");
+//        dd($postStr);
+        ///处理xml
+        $postObj=simplexml_load_string($postStr,"SimpleXMLElement",LIBXML_NOCDATA);
+        $fromUserName=$postObj->FromUserName;
+        $toUserName=$postObj->ToUserName;
+        $time=time();
+        //判断是不是事件
+        if($postObj->MsgType == 'event'){
+            //判断是不是关注事件
+            if($postObj->Event == 'subscribe'){
+                //首次关注回复文本信息
+                $Content = env('CONTENT');
+                WeChat::sendMsg($postObj,$Content);
+            }
+        }
+        //获取用户发送的信息
+        $keyWords=(string)$postObj->Content;
+        //关键字回复
+        $config=config('Keywords');
+//        dd($config[$keyWords]);
+        if(isset($config[$keyWords])){
+            WeChat::sendMsg($postObj,$config[$keyWords]);
+        }else{
+            //调用图灵机器人
+            $res = WeChat::tuLing($keyWords);
+            $Content=$res['results'][0]['values']['text'];
+            //发送消息
+            WeChat::sendMsg($postObj,$Content);
+        }
+    }
+   public function CheckSignatrue($request){
+        $nonce = $request->nonce;
+        $timestamp=$request->timestamp;
+        $signature=$request->signature;
+        $token = env("WXTOKEN");
+        $tmparr=[$token,$timestamp,$nonce];
+        sort($tmparr);
+        $tmpstr=implode($tmparr);
+        $str = sha1($tmpstr);
+        if ($str == $signature){
+            return true;
+        }else{
+            return false;
+        }
+   }
+
+
+
 }
 ?>
